@@ -38,8 +38,9 @@
         }
         #video-preview {
             position: absolute;
-            bottom: 1.5rem;
-            right: 1.5rem;
+            /* Posicionado con top/left para facilitar el arrastre */
+            top: calc(100vh - 90px - 1.5rem);
+            left: calc(100vw - 120px - 1.5rem);
             width: 120px;
             height: 90px;
             border-radius: 0.5rem;
@@ -49,6 +50,7 @@
             z-index: 20;
             pointer-events: auto;
             display: none; /* Oculto hasta que se inicie */
+            cursor: move; /* Cursor para indicar que es movible */
         }
         .scene-switcher {
             background-color: rgba(0,0,0,0.3);
@@ -536,7 +538,45 @@
                 }
             }
         });
+
+        // --- Lógica para arrastrar la ventana de video ---
+        let isDragging = false;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        videoElement.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            e.preventDefault();
+            
+            offsetX = e.clientX - videoElement.offsetLeft;
+            offsetY = e.clientY - videoElement.offsetTop;
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            
+            let newLeft = e.clientX - offsetX;
+            let newTop = e.clientY - offsetY;
+
+            const bodyRect = document.body.getBoundingClientRect();
+            const videoRect = videoElement.getBoundingClientRect();
+            newLeft = Math.max(0, Math.min(newLeft, bodyRect.width - videoRect.width));
+            newTop = Math.max(0, Math.min(newTop, bodyRect.height - videoRect.height));
+
+            videoElement.style.left = `${newLeft}px`;
+            videoElement.style.top = `${newTop}px`;
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
     </script>
 </body>
 </html>
+
 
