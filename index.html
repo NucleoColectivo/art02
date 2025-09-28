@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arte Corporal Interactivo</title>
+    <title>Cuerpo Interactivo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body, html {
@@ -12,6 +12,7 @@
             overflow: hidden;
             background-color: #000;
             font-family: 'Inter', sans-serif;
+            touch-action: none; /* Previene el scroll en móviles */
         }
         canvas {
             display: block;
@@ -38,11 +39,7 @@
         }
         #video-preview {
             position: absolute;
-            /* Posicionado con top/left para facilitar el arrastre */
-            top: calc(100vh - 90px - 1.5rem);
-            left: calc(100vw - 120px - 1.5rem);
-            width: 120px;
-            height: 90px;
+            /* El tamaño y la posición inicial se establecen con JS */
             border-radius: 0.5rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
             object-fit: cover;
@@ -105,7 +102,7 @@
         <!-- Pantalla de inicio para solicitar permisos -->
         <div id="start-screen" class="absolute inset-0 flex items-center justify-center z-20 bg-black">
             <div class="text-center p-4">
-                 <h1 class="text-4xl md:text-6xl font-bold text-white mb-2">Arte Corporal Interactivo</h1>
+                 <h1 class="text-4xl md:text-6xl font-bold text-white mb-2">Cuerpo Interactivo</h1>
                 <p class="text-lg text-gray-300 mb-8">Una experiencia visual reactiva a tu voz y silueta.</p>
                 <button id="start-button" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg text-xl transition-all duration-300 ease-in-out transform hover:scale-105 shadow-lg">
                     Iniciar
@@ -457,10 +454,29 @@
         }
         
         function onWindowResize() {
+            // Actualizar escena de Three.js
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
+
+            // Actualizar vista previa del video
+            const isLandscape = window.innerWidth > window.innerHeight;
+            const videoWidth = isLandscape ? 120 : 90;
+            const videoHeight = isLandscape ? 90 : 120;
+            videoElement.style.width = `${videoWidth}px`;
+            videoElement.style.height = `${videoHeight}px`;
+
+            // Asegurarse de que el video no se salga de los límites después de redimensionar
+            let currentLeft = parseFloat(videoElement.style.left);
+            let currentTop = parseFloat(videoElement.style.top);
+            
+            if (currentLeft + videoWidth > window.innerWidth) {
+                videoElement.style.left = `${window.innerWidth - videoWidth}px`;
+            }
+            if (currentTop + videoHeight > window.innerHeight) {
+                videoElement.style.top = `${window.innerHeight - videoHeight}px`;
+            }
         }
         
         function animate() {
@@ -497,6 +513,15 @@
                 const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 videoElement.srcObject = mediaStream;
                 videoElement.style.display = 'block';
+
+                // Configurar tamaño y posición inicial del video preview
+                const isLandscape = window.innerWidth > window.innerHeight;
+                const initialWidth = isLandscape ? 120 : 90;
+                const initialHeight = isLandscape ? 90 : 120;
+                videoElement.style.width = `${initialWidth}px`;
+                videoElement.style.height = `${initialHeight}px`;
+                videoElement.style.top = `${window.innerHeight - initialHeight - 24}px`; // 1.5rem = 24px
+                videoElement.style.left = `${window.innerWidth - initialWidth - 24}px`; // 1.5rem = 24px
 
                 videoTexture = new THREE.VideoTexture(videoElement);
 
@@ -539,27 +564,22 @@
             }
         });
 
-        // --- Lógica para arrastrar la ventana de video ---
+        // --- Lógica para arrastrar la ventana de video (Ratón y Táctil) ---
         let isDragging = false;
         let offsetX = 0;
         let offsetY = 0;
 
-        videoElement.addEventListener('mousedown', (e) => {
+        function dragStart(clientX, clientY) {
             isDragging = true;
-            e.preventDefault();
-            
-            offsetX = e.clientX - videoElement.offsetLeft;
-            offsetY = e.clientY - videoElement.offsetTop;
-            
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+            offsetX = clientX - videoElement.offsetLeft;
+            offsetY = clientY - videoElement.offsetTop;
+        }
 
-        function onMouseMove(e) {
+        function dragMove(clientX, clientY) {
             if (!isDragging) return;
             
-            let newLeft = e.clientX - offsetX;
-            let newTop = e.clientY - offsetY;
+            let newLeft = clientX - offsetX;
+            let newTop = clientY - offsetY;
 
             const bodyRect = document.body.getBoundingClientRect();
             const videoRect = videoElement.getBoundingClientRect();
@@ -570,12 +590,50 @@
             videoElement.style.top = `${newTop}px`;
         }
 
-        function onMouseUp() {
+        function dragEnd() {
             isDragging = false;
+        }
+
+        // Eventos de Ratón
+        videoElement.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            dragStart(e.clientX, e.clientY);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            dragMove(e.clientX, e.clientY);
+        }
+
+        function onMouseUp() {
+            dragEnd();
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        // Eventos Táctiles
+        videoElement.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            dragStart(touch.clientX, touch.clientY);
+            document.addEventListener('touchmove', onTouchMove);
+            document.addEventListener('touchend', onTouchEnd);
+        });
+
+        function onTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            dragMove(touch.clientX, touch.clientY);
+        }
+
+        function onTouchEnd() {
+            dragEnd();
+            document.removeEventListener('touchmove', onTouchMove);
+            document.removeEventListener('touchend', onTouchEnd);
         }
     </script>
 </body>
 </html>
+
 
